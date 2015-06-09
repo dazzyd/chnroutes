@@ -1,6 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
+import ipaddress
 import math
 import os
 import re
@@ -180,13 +181,11 @@ for /F "tokens=3" %%* in ('route print ^| findstr "\\<0.0.0.0\\>"') do set "gw=%
     downfile.close()
 
 def fetch_ip_data():
+    print("Fetching data from apnic.net, please wait...", file=sys.stderr)
     url = 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
     try:
-        data = subprocess.check_output(['wget', url, '-O-'])
+        data = subprocess.check_output(['wget', url, '-O-']).decode()
     except (OSError, AttributeError):
-        print("Fetching data from apnic.net, "
-              "it might take a few minutes, please wait...",
-              file=sys.stderr)
         response = urllib.request.urlopen(url)
         data = response.read().decode("UTF-8")
 
@@ -210,6 +209,15 @@ def fetch_ip_data():
         cidr = 32 - int(math.log(num_ip, 2))
 
         results.append((starting_ip, mask, cidr))
+
+    print("Collapsing addresses, please wait...", file=sys.stderr)
+    networks = []
+    for ip, _, mask in results:
+        networks.append(ipaddress.ip_network("%s/%s" % (ip, mask)))
+    results = []
+    for net in ipaddress.collapse_addresses(networks):
+        results.append((str(net.network_address),
+                        str(net.netmask), net.prefixlen))
 
     return results
 
